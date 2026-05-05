@@ -19,7 +19,7 @@ export default async function DmsPage() {
   const weekStart = startOfWeek(today, { weekStartsOn: 1 });
   const monthStart = startOfMonth(today);
 
-  const [today_, week_, month_, total_, unread, recent, automations, series] = await Promise.all([
+  const [today_, week_, month_, total_, unread, recent, automations, dmSeries] = await Promise.all([
     prisma.message.count({ where: { accountId: account.id, fromBusiness: false, sentAt: { gte: today } } }),
     prisma.message.count({ where: { accountId: account.id, fromBusiness: false, sentAt: { gte: weekStart } } }),
     prisma.message.count({ where: { accountId: account.id, fromBusiness: false, sentAt: { gte: monthStart } } }),
@@ -35,9 +35,8 @@ export default async function DmsPage() {
       where: { accountId: account.id },
       orderBy: { triggerCount: "desc" },
     }),
-  ].concat([getDmsSeries(account.id, 30) as never]));
-
-  const dmSeries = (await getDmsSeries(account.id, 30)) as Array<{ date: string; DMs: number }>;
+    getDmsSeries(account.id, 30),
+  ]);
 
   // Avg response time = avg time from inbound message → next outbound from business in same conv
   const responseSamples = await prisma.message.findMany({

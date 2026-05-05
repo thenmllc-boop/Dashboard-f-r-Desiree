@@ -1,9 +1,6 @@
-/**
- * Cron: Reports – daily at 08:00.
- * crontab:  0 8 * * *  cd /app && npm run cron:reports
- *
- * Calls the same code path as /api/cron/generate-reports.
- */
+// Cron: Reports – daily at 08:00.
+// crontab:  0 8 * * *  cd /app && npm run cron:reports
+// Calls the same code path as /api/cron/generate-reports.
 import { prisma } from "../../src/lib/db";
 import { generateInsights } from "../../src/lib/insights";
 import { startOfDay, startOfWeek, startOfMonth, endOfDay, endOfWeek, endOfMonth, subDays, subMonths } from "date-fns";

@@ -1,7 +1,5 @@
-/**
- * Cron: Media Insights – every 6 hours.
- * crontab:  0 */6 * * *  cd /app && npm run cron:media-insights
- */
+// Cron: Media Insights – every 6 hours.
+// crontab:  0 */6 * * *  cd /app && npm run cron:media-insights
 import { prisma } from "../../src/lib/db";
 import { syncMediaForAccount, syncMediaInsights } from "../../src/lib/instagram/sync";
 

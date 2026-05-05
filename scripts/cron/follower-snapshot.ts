@@ -1,9 +1,7 @@
-/**
- * Cron: Follower Snapshot – daily.
- * Captures follower count to enable churn estimation
- * (since the IG API doesn't expose unfollows).
- * crontab:  0 3 * * *  cd /app && npm run cron:follower-snapshot
- */
+// Cron: Follower Snapshot – daily.
+// Captures follower count to enable churn estimation
+// (since the IG API doesn't expose unfollows).
+// crontab:  0 3 * * *  cd /app && npm run cron:follower-snapshot
 import { prisma } from "../../src/lib/db";
 import { fetchAccountProfile } from "../../src/lib/instagram/account";
 

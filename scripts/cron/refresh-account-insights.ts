@@ -1,7 +1,5 @@
-/**
- * Cron: Account Insights – daily.
- * crontab:  10 2 * * *  cd /app && npm run cron:account-insights
- */
+// Cron: Account Insights – daily.
+// crontab:  10 2 * * *  cd /app && npm run cron:account-insights
 import { prisma } from "../../src/lib/db";
 import { syncAccountInsights, syncAccountProfile } from "../../src/lib/instagram/sync";
 
