@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { ensureCronAuth } from "@/lib/cron-auth";
 import { syncAccountInsights, syncAccountProfile, syncConversations, syncMediaForAccount, syncMediaInsights } from "@/lib/instagram/sync";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** Manual trigger – runs the entire sync pipeline once. */

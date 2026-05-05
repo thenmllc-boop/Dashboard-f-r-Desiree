@@ -14,6 +14,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { attributeLead } from "@/lib/attribution";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as {
     subscriber?: { ig_username?: string; name?: string; email?: string; phone?: string };

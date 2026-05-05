@@ -25,6 +25,9 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { attributeLead } from "@/lib/attribution";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 const schema = z.object({
   email: z.string().email().optional(),
   name: z.string().optional(),

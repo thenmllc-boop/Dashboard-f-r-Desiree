@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { ensureCronAuth } from "@/lib/cron-auth";
 import { syncAccountInsights, syncAccountProfile } from "@/lib/instagram/sync";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {

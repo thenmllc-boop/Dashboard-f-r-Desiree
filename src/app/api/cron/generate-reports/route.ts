@@ -4,6 +4,7 @@ import { ensureCronAuth } from "@/lib/cron-auth";
 import { generateInsights } from "@/lib/insights";
 import { startOfDay, startOfWeek, startOfMonth, endOfDay, endOfWeek, endOfMonth, subDays, subMonths } from "date-fns";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
