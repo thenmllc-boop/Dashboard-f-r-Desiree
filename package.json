@@ -12,6 +12,7 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
+    "create-admin": "tsx scripts/create-admin.ts",
     "cron:media-insights": "tsx scripts/cron/refresh-media-insights.ts",
     "cron:account-insights": "tsx scripts/cron/refresh-account-insights.ts",
     "cron:follower-snapshot": "tsx scripts/cron/follower-snapshot.ts",

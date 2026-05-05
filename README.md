@@ -127,6 +127,28 @@ npm run dev
 # Login: ADMIN_EMAIL / ADMIN_PASSWORD aus .env
 ```
 
+### Admin-User anlegen / Passwort zurücksetzen
+
+`db:seed` legt den Admin automatisch an (Default `admin@example.com` /
+`change-me`, anpassbar via `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env`).
+
+Wenn du **keinen** vollen Seed willst (z.B. in Production), nutze das
+dedizierte Script:
+
+```bash
+# Über Env-Variablen
+ADMIN_EMAIL="dein@email.de" ADMIN_PASSWORD="sicheres-pw" npm run create-admin
+
+# Oder per Flag
+npm run create-admin -- --email=dein@email.de --password=sicheres-pw
+
+# Oder interaktiv (Passwort wird nicht im Shell-History gespeichert)
+npm run create-admin -- --email=dein@email.de
+```
+
+Das Script ist idempotent: bei vorhandenem User wird nur der Passwort-Hash
+und der Name aktualisiert.
+
 ---
 
 ## 🔑 Meta / Instagram API – Setup
