@@ -1,0 +1,413 @@
+// ─────────────────────────────────────────────────────────────────
+// Instagram Analytics Dashboard – Prisma Schema
+// PostgreSQL
+// ─────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Auth
+// ─────────────────────────────────────────────────────────────────
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String?
+  passwordHash  String
+  role          UserRole @default(ADMIN)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+enum UserRole {
+  ADMIN
+  VIEWER
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Instagram Account
+// ─────────────────────────────────────────────────────────────────
+model Account {
+  id                  String   @id @default(cuid())
+  igUserId            String   @unique  // IG Business Account ID
+  username            String
+  name                String?
+  profilePictureUrl   String?
+  biography           String?
+  website             String?
+  accessToken         String   // long-lived token (encrypted in production)
+  followersCount      Int      @default(0)
+  followsCount        Int      @default(0)
+  mediaCount          Int      @default(0)
+  lastSyncAt          DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  media               InstagramMedia[]
+  accountInsights     DailyAccountInsight[]
+  followerSnapshots   FollowerSnapshot[]
+  conversations       Conversation[]
+  messages            Message[]
+  leads               Lead[]
+  campaigns           Campaign[]
+  automations         AutomationTrigger[]
+  reports             Report[]
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Media (Reels, Posts, Carousel, Stories)
+// ─────────────────────────────────────────────────────────────────
+model InstagramMedia {
+  id            String       @id @default(cuid())
+  igMediaId     String       @unique // ID returned by Graph API
+  accountId     String
+  caption       String?      @db.Text
+  mediaType     MediaType
+  mediaProductType String?   // FEED | REELS | STORY | IGTV
+  mediaUrl      String?
+  thumbnailUrl  String?
+  permalink     String?
+  timestamp     DateTime
+  durationSec   Float?
+
+  // Categorization (manual or AI-assigned)
+  contentPillarId String?
+  hookType        String?  // e.g. "question", "stat", "story", "controversial"
+  ctaType         String?  // e.g. "DM_KEYWORD", "LINK_IN_BIO", "COMMENT", "SHARE"
+  ctaKeyword      String?  // the unique keyword that triggers the DM funnel
+
+  // Cached aggregates (kept in sync by cron from MediaInsight)
+  views         Int    @default(0)
+  reach         Int    @default(0)
+  likes         Int    @default(0)
+  comments      Int    @default(0)
+  shares        Int    @default(0)
+  saves         Int    @default(0)
+  watchTimeSec  Float?
+  engagementRate Float @default(0)
+  performanceScore Float @default(0)
+  status        MediaStatus @default(AVERAGE)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  account        Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contentPillar  ContentCategory? @relation(fields: [contentPillarId], references: [id])
+  insights       MediaInsight[]
+  attributions   AttributionEvent[]
+  leads          Lead[]
+  campaigns      Campaign[]
+
+  @@index([accountId, timestamp])
+  @@index([performanceScore])
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  CAROUSEL_ALBUM
+  REEL
+  STORY
+}
+
+enum MediaStatus {
+  WINNER
+  AVERAGE
+  WEAK
+}
+
+// Time-series of media insights (snapshot per fetch)
+model MediaInsight {
+  id          String   @id @default(cuid())
+  mediaId     String
+  capturedAt  DateTime @default(now())
+  views       Int      @default(0)
+  reach       Int      @default(0)
+  likes       Int      @default(0)
+  comments    Int      @default(0)
+  shares      Int      @default(0)
+  saves       Int      @default(0)
+  watchTimeSec Float?
+  totalInteractions Int @default(0)
+  followsFromMedia  Int @default(0) // ig_reels_video_view_total / follows
+  profileVisits     Int @default(0)
+  raw         Json?    // full raw API response for forensic inspection
+
+  media       InstagramMedia @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@index([mediaId, capturedAt])
+}
+
+// Daily roll-up of account-level insights
+model DailyAccountInsight {
+  id              String   @id @default(cuid())
+  accountId       String
+  date            DateTime @db.Date
+  reach           Int      @default(0)
+  impressions     Int      @default(0) // legacy / where available
+  profileViews    Int      @default(0)
+  websiteClicks   Int      @default(0)
+  emailClicks     Int      @default(0)
+  phoneClicks     Int      @default(0)
+  textClicks      Int      @default(0)
+  followerCount   Int      @default(0)
+  followsGained   Int      @default(0)
+  followsLost     Int      @default(0) // estimated when not directly available
+  newDms          Int      @default(0)
+  totalDms        Int      @default(0)
+  raw             Json?
+
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, date])
+  @@index([accountId, date])
+}
+
+// Daily snapshot of follower count for delta calculations + churn estimation
+model FollowerSnapshot {
+  id          String   @id @default(cuid())
+  accountId   String
+  capturedAt  DateTime @default(now())
+  followers   Int
+  follows     Int
+  mediaCount  Int
+
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, capturedAt])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// DMs / Conversations / Messaging
+// ─────────────────────────────────────────────────────────────────
+model Conversation {
+  id            String   @id @default(cuid())
+  accountId     String
+  igThreadId    String   @unique // Graph API conversation ID
+  participantId String   // IG-scoped user ID of the other party
+  participantUsername String?
+  participantName     String?
+  lastMessageAt DateTime?
+  unreadCount   Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  account       Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  messages      Message[]
+  leads         Lead[]
+
+  @@index([accountId, lastMessageAt])
+}
+
+model Message {
+  id            String   @id @default(cuid())
+  accountId     String
+  conversationId String
+  igMessageId   String?  @unique
+  fromBusiness  Boolean  @default(false)
+  text          String?  @db.Text
+  attachmentType String? // image, video, share, story_mention, etc.
+  attachmentUrl  String?
+  triggeredKeyword String? // matched keyword that started a funnel
+  triggeredAutomationId String?
+  sentAt        DateTime
+  createdAt     DateTime @default(now())
+
+  account       Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  conversation  Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  automation    AutomationTrigger? @relation(fields: [triggeredAutomationId], references: [id])
+
+  @@index([accountId, sentAt])
+  @@index([conversationId, sentAt])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Lead Attribution
+// ─────────────────────────────────────────────────────────────────
+model Lead {
+  id              String     @id @default(cuid())
+  accountId       String
+  fullName        String?
+  email           String?
+  phone           String?
+  igUsername      String?
+  status          LeadStatus @default(NEW)
+  source          LeadSource @default(UNKNOWN)
+  sourceMediaId   String?    // attributed video, if known
+  sourceCampaignId String?
+  conversationId  String?
+  ctaKeyword      String?    // keyword that brought them in
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  utmContent      String?
+  utmTerm         String?
+  landingPage     String?
+  notes           String?    @db.Text
+  bookedCallAt    DateTime?
+  purchasedAt     DateTime?
+  lostReason      String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  account        Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sourceMedia    InstagramMedia? @relation(fields: [sourceMediaId], references: [id])
+  sourceCampaign Campaign?       @relation(fields: [sourceCampaignId], references: [id])
+  conversation   Conversation?   @relation(fields: [conversationId], references: [id])
+  events         AttributionEvent[]
+
+  @@index([accountId, createdAt])
+  @@index([status])
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CALL_BOOKED
+  PURCHASED
+  LOST
+}
+
+enum LeadSource {
+  UNKNOWN
+  DM_KEYWORD
+  COMMENT_KEYWORD
+  STORY_REPLY
+  PROFILE_VISIT
+  LINK_IN_BIO
+  MANYCHAT
+  UTM_LINK
+  WEBSITE_FORM
+  REFERRAL
+}
+
+// Granular event log for attribution.
+// Every touchpoint that helps tie a lead → media gets an event row.
+model AttributionEvent {
+  id           String           @id @default(cuid())
+  type         AttributionType
+  leadId       String?
+  mediaId      String?
+  campaignId   String?
+  ctaKeyword   String?
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  utmContent   String?
+  rawPayload   Json?
+  occurredAt   DateTime         @default(now())
+
+  lead         Lead?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  media        InstagramMedia?  @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+  campaign     Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+  @@index([mediaId])
+  @@index([occurredAt])
+}
+
+enum AttributionType {
+  DM_TRIGGER
+  COMMENT_TRIGGER
+  LANDING_PAGE_VISIT
+  FORM_SUBMIT
+  CALL_BOOKED
+  PURCHASE
+  MANYCHAT_TAG
+  STORY_REPLY
+  PROFILE_VIEW
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Campaigns + Content categorization
+// ─────────────────────────────────────────────────────────────────
+model Campaign {
+  id          String   @id @default(cuid())
+  accountId   String
+  name        String
+  description String?  @db.Text
+  ctaKeyword  String?  @unique // unique funnel trigger word
+  utmCampaign String?
+  manychatTag String?
+  startedAt   DateTime?
+  endedAt     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  account     Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  media       InstagramMedia[]
+  leads       Lead[]
+  events      AttributionEvent[]
+
+  @@index([accountId])
+}
+
+model ContentCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  color       String   @default("#7FAF9B")
+  description String?
+
+  media       InstagramMedia[]
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Reports (daily/weekly/monthly auto-generated)
+// ─────────────────────────────────────────────────────────────────
+model Report {
+  id          String     @id @default(cuid())
+  accountId   String
+  type        ReportType
+  periodStart DateTime
+  periodEnd   DateTime
+  payload     Json       // full structured report data
+  summary     String?    @db.Text // narrative summary (AI-generated)
+  createdAt   DateTime   @default(now())
+
+  account     Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, type, periodStart])
+  @@index([accountId, type])
+}
+
+enum ReportType {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Automation triggers (DM keyword funnels, ManyChat flows, etc.)
+// ─────────────────────────────────────────────────────────────────
+model AutomationTrigger {
+  id            String   @id @default(cuid())
+  accountId     String
+  name          String
+  keyword       String
+  source        AutomationSource @default(NATIVE)
+  manychatFlowId String?
+  responseTemplate String? @db.Text
+  active        Boolean  @default(true)
+  triggerCount  Int      @default(0)
+  leadCount     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  messages      Message[]
+
+  @@unique([accountId, keyword])
+}
+
+enum AutomationSource {
+  NATIVE
+  MANYCHAT
+}
